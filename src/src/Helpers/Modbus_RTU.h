@@ -2,7 +2,7 @@
 #define HELPERS_MODBUS_RTU_H
 
 
-#include <Arduino.h>
+#include "../../ESPEasy_common.h"
 #include <ESPeasySerial.h>
 
 
@@ -44,7 +44,7 @@
 
 
 struct ModbusRTU_struct  {
-  ModbusRTU_struct();
+  ModbusRTU_struct() = default;
 
   ~ModbusRTU_struct();
 

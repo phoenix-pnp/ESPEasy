@@ -1,8 +1,7 @@
 #ifndef WEBSERVER_WEBTEMPLATEPARSER_H
 #define WEBSERVER_WEBTEMPLATEPARSER_H
 
-#include <Arduino.h>
-
+#include "../../ESPEasy_common.h"
 
 #define _HEAD false
 #define _TAIL true
@@ -18,6 +17,8 @@
 #define MENU_INDEX_RULES         5
 #define MENU_INDEX_NOTIFICATIONS 6
 #define MENU_INDEX_TOOLS         7
+#define MENU_INDEX_SETUP         254
+#define MENU_INDEX_CUSTOM_PAGE   255
 extern uint8_t navMenuIndex;
 
 

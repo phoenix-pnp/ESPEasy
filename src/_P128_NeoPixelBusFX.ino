@@ -7,6 +7,12 @@
 // #######################################################################################################
 
 // Changelog:
+// 2023-05-13, tonhuisman Add P128_USES_BGR / BGR definitions and support (compile-time)
+//                        Use more global NeoWs2812xMethod, as the library uses best matching hardware features per CPU type
+// 2023-05-12, tonhuisman Update for latest NeoPixelBusFx changes (NeoPixelBusLg class, (S/G)etLuminance method)
+// 2022-07-20, tonhuisman Make FakeTV compile-time optional, disabled by default on ESP8266, enabled by default on ESP32
+//                        P128_ENABLE_FAKETV can be set to 0/1 in Custom.h
+// 2022-07-02, tonhuisman Introduce Max Brightness setting for protecting the hardware and power supply (and the eyes :-))
 // 2022-06-12, tonhuisman Optimizations, revert Makuna/NeopixelBus library to 2.6.9 for incompatibilties like [[maybe_unused]] arguments
 // 2022-01-30, tonhuisman Fix JSON message to use proper JSON functions, some bugfixes and small source improvements
 // 2022-01-09, tonhuisman Add conditional defines P128_USES_<colormode> (options: GRB/GRBW/RGB/RGBW/BRG/BRG) for selecting the
@@ -60,9 +66,9 @@
 
    nfx theatre color [backgroundcolor] [count] [speed]
 
-   nfx scan color [backgroundcolor] [speed]
+   nfx scan color [backgroundcolor] [speed] [startpixel] [endpixel]
 
-   nfx dualscan color [backgroundcolor] [speed]
+   nfx dualscan color [backgroundcolor] [speed] [startpixel] [endpixel]
 
    nfx twinkle color [backgroundcolor] [speed]
 
@@ -123,7 +129,7 @@
 
 # define PLUGIN_128
 # define PLUGIN_ID_128         128
-# define PLUGIN_NAME_128       "Output - NeoPixel (BusFX) [TESTING]"
+# define PLUGIN_NAME_128       "Output - NeoPixel (BusFX)"
 # define PLUGIN_VALUENAME1_128 "Mode"
 # define PLUGIN_VALUENAME2_128 "Lastmode"
 # define PLUGIN_VALUENAME3_128 "Fadetime"
@@ -174,13 +180,14 @@ boolean Plugin_128(uint8_t function, struct EventStruct *event, String& string)
       break;
     }
 
-    # ifdef ESP32
     case PLUGIN_SET_DEFAULTS:
     {
-      PIN(0) = -1; // None
+      # ifdef ESP32
+      PIN(0) = -1;                  // None
+      # endif // ifdef ESP32
+      P128_CONFIG_MAX_BRIGHT = 255; // Allow full brightness by default, range 1..255
       break;
     }
-    # endif // ifdef ESP32
 
     case PLUGIN_WEBFORM_LOAD:
     {
@@ -194,7 +201,10 @@ boolean Plugin_128(uint8_t function, struct EventStruct *event, String& string)
       addPinSelect(PinSelectPurpose::Generic_output, F("taskdevicepin1"), PIN(0));
       # endif // ifdef ESP32
 
-      addFormNumericBox(F("Led Count"), F("ledcnt"), P128_CONFIG_LED_COUNT, 1, 999);
+      addFormNumericBox(F("Led Count"),      F("ledcnt"),    P128_CONFIG_LED_COUNT,  1, 999);
+
+      if (P128_CONFIG_MAX_BRIGHT == 0) { P128_CONFIG_MAX_BRIGHT = 255; } // Set to default for existing installations
+      addFormNumericBox(F("Max brightness"), F("maxbright"), P128_CONFIG_MAX_BRIGHT, 1, 255);
 
       success = true;
       break;
@@ -202,7 +212,8 @@ boolean Plugin_128(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SAVE:
     {
-      P128_CONFIG_LED_COUNT = getFormItemInt(F("ledcnt"));
+      P128_CONFIG_LED_COUNT  = getFormItemInt(F("ledcnt"));
+      P128_CONFIG_MAX_BRIGHT = getFormItemInt(F("maxbright"));
 
       # ifdef ESP32
       PIN(0) = getFormItemInt(F("taskdevicepin1"));
@@ -221,7 +232,8 @@ boolean Plugin_128(uint8_t function, struct EventStruct *event, String& string)
         clearPluginTaskData(event->TaskIndex);
       }
 
-      initPluginTaskData(event->TaskIndex, new (std::nothrow) P128_data_struct(PIN(0), P128_CONFIG_LED_COUNT));
+      if (P128_CONFIG_MAX_BRIGHT == 0) { P128_CONFIG_MAX_BRIGHT = 255; } // Set to default for existing installations
+      initPluginTaskData(event->TaskIndex, new (std::nothrow) P128_data_struct(PIN(0), P128_CONFIG_LED_COUNT, P128_CONFIG_MAX_BRIGHT));
       P128_data_struct *P128_data = static_cast<P128_data_struct *>(getPluginTaskData(event->TaskIndex));
 
       success = nullptr != P128_data;

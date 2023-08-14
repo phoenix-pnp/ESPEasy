@@ -12,32 +12,22 @@
 #include "../WebServer/Markup.h"
 #include "../WebServer/Markup_Forms.h"
 
+#include <ESPEasySerialType.h>
+
 
 String serialHelper_getSerialTypeLabel(ESPEasySerialPort serType) {
-  int portnr = 0;
-
-  switch (serType) {
-    case ESPEasySerialPort::software:        return F("SoftwareSerial");
-    case ESPEasySerialPort::sc16is752:       return F("I2C Serial");
-    case ESPEasySerialPort::serial0_swap:    return F("HW Serial0 swap");
-    case ESPEasySerialPort::serial0:         portnr = 0; break;
-    case ESPEasySerialPort::serial1:         portnr = 1; break;
-    case ESPEasySerialPort::serial2:         portnr = 2; break;
-    default:
-      return "";
-  }
-  String label = F("HW Serial");
-
-  label += portnr;
-  return label;
+  return ESPEasySerialPort_toString(serType);
 }
 
 void serialHelper_log_GpioDescription(ESPEasySerialPort typeHint, int config_pin1, int config_pin2) {
+  #ifndef BUILD_NO_DEBUG
+
   if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
     String log = F("Serial : ");
     log += serialHelper_getGpioDescription(typeHint, config_pin1, config_pin2, " ");
     addLogMove(LOG_LEVEL_DEBUG, log);
   }
+  #endif // ifndef BUILD_NO_DEBUG
 }
 
 String serialHelper_getGpioDescription(ESPEasySerialPort typeHint, int config_pin1, int config_pin2, const String& newline) {
@@ -45,37 +35,47 @@ String serialHelper_getGpioDescription(ESPEasySerialPort typeHint, int config_pi
 
   result.reserve(20);
 
-  switch (ESPeasySerialType::getSerialType(typeHint, config_pin1, config_pin2)) {
-    case ESPEasySerialPort::sc16is752:
-    {
-      result += formatToHex(config_pin1);
-      result += newline;
-      result += F(" ch: ");
-      result += config_pin2 == 0 ? F("A") : F("B");
-      return result;
-    }
-    case ESPEasySerialPort::software:
-    case ESPEasySerialPort::serial0_swap:
-    case ESPEasySerialPort::serial0:
-    case ESPEasySerialPort::serial1:
-    case ESPEasySerialPort::serial2:
-    {
-      result += F("RX: ");
-      result += formatGpioLabel(config_pin1, false);
-      result += newline;
-      result += F("TX: ");
-      result += formatGpioLabel(config_pin2, false);
-      break;
-    }
-    default:
-      break;
+  const ESPEasySerialPort porttype = ESPeasySerialType::getSerialType(typeHint, config_pin1, config_pin2);
+#if USES_I2C_SC16IS752
+  if (porttype == ESPEasySerialPort::sc16is752)
+  {
+    result += formatToHex(config_pin1);
+    result += newline;
+    result += F(" ch: ");
+    result += config_pin2 == 0 ? 'A' : 'B';
+    return result;
+  }
+#endif
+#if USES_HWCDC || USES_USBCDC
+#if USES_HWCDC
+  if (porttype == ESPEasySerialPort::usb_hw_cdc)
+#else
+  if (porttype == ESPEasySerialPort::usb_cdc_0 /*||
+      porttype == ESPEasySerialPort::usb_cdc_1*/)
+#endif
+  {
+    result += getConflictingUse(PIN_USB_D_MIN);
+    result += formatGpioLabel(PIN_USB_D_MIN, false);
+    result += newline;
+    result += getConflictingUse(PIN_USB_D_PLUS);
+    result += formatGpioLabel(PIN_USB_D_PLUS, false);
+    return result;
+  }
+#endif
+  if (useGPIOpins(porttype)) 
+  {
+    result += F("RX: ");
+    result += formatGpioLabel(config_pin1, false);
+    result += newline;
+    result += F("TX: ");
+    result += formatGpioLabel(config_pin2, false);
   }
   return result;
 }
 
 void serialHelper_getGpioNames(struct EventStruct *event, bool rxOptional, bool txOptional) {
-  event->String1 = formatGpioName_RX(rxOptional);
-  event->String2 = formatGpioName_TX(txOptional);
+  event->String1 = formatGpioName_serialRX(rxOptional);
+  event->String2 = formatGpioName_serialTX(txOptional);
 }
 
 int8_t serialHelper_getRxPin(struct EventStruct *event) {
@@ -105,15 +105,15 @@ String serialHelper_getSerialTypeLabel(struct EventStruct *event) {
 
 #ifndef DISABLE_SC16IS752_Serial
 void serialHelper_addI2CuartSelectors(int address, int channel) {
-  #define     SC16IS752_I2C_ADDRESSES             16
-  #define     SC16IS752_I2C_BASE_ADDR             (0x90 >> 1)
-  #define     SC16IS752_CHANNELS                  2
-  #define     SC16IS752_CHANNEL_A                 0x00
-  #define     SC16IS752_CHANNEL_B                 0x01
+  # define     SC16IS752_I2C_ADDRESSES             16
+  # define     SC16IS752_I2C_BASE_ADDR             (0x90 >> 1)
+  # define     SC16IS752_CHANNELS                  2
+  # define     SC16IS752_CHANNEL_A                 0x00
+  # define     SC16IS752_CHANNEL_B                 0x01
   {
     String id = F("i2cuart_addr");
     addRowLabel_tr_id(F("I2C Address"), id);
-    do_addSelector_Head(id, EMPTY_STRING, EMPTY_STRING, false);
+    do_addSelector_Head(id, F(""), EMPTY_STRING, false);
 
     if ((address < SC16IS752_I2C_BASE_ADDR) || (address >= (SC16IS752_I2C_BASE_ADDR + SC16IS752_I2C_ADDRESSES))) {
       // selected address is not in range
@@ -137,16 +137,19 @@ void serialHelper_addI2CuartSelectors(int address, int channel) {
     if ((channel != SC16IS752_CHANNEL_A) && (channel != SC16IS752_CHANNEL_B)) {
       channel = SC16IS752_CHANNEL_A;
     }
-    const __FlashStringHelper * chOptions[SC16IS752_CHANNELS];
-    int    chValues[SC16IS752_CHANNELS];
-    chValues[0]  = SC16IS752_CHANNEL_A;
-    chValues[1]  = SC16IS752_CHANNEL_B;
-    chOptions[0] = F("A");
-    chOptions[1] = F("B");
+    const __FlashStringHelper *chOptions[SC16IS752_CHANNELS] = {
+      F("A"),
+      F("B"),
+    };
+    const int chValues[SC16IS752_CHANNELS] = {
+      SC16IS752_CHANNEL_A,
+      SC16IS752_CHANNEL_B,
+    };
     addFormSelector(F("Channel"), F("i2cuart_ch"), SC16IS752_CHANNELS, chOptions, chValues, channel);
   }
 }
-#endif
+
+#endif // ifndef DISABLE_SC16IS752_Serial
 
 void serialHelper_webformLoad(struct EventStruct *event) {
   serialHelper_webformLoad(event, true);
@@ -168,127 +171,168 @@ void serialHelper_webformLoad(ESPEasySerialPort port, int rxPinDef, int txPinDef
   #ifdef ESP8266
 
   // Script to show GPIO pins for SoftwareSerial or I2C addresses for the I2C to UART bridge
-  html_add_script(F(
-                    "function serialPortChanged(elem) {var style = elem.value == 6 ? '' : 'none';var i2cstyle = elem.value == 1 ? '' : 'none';document.getElementById('tr_taskdevicepin1').style.display = style;document.getElementById('tr_taskdevicepin2').style.display = style;document.getElementById('tr_i2cuart_addr').style.display = i2cstyle;document.getElementById('tr_i2cuart_ch').style.display = i2cstyle;}"),
+  // "function serialPortChanged(elem) {var style = elem.value == 6 ? '' : 'none';var i2cstyle = elem.value == 1 ? '' :
+  // 'none';document.getElementById('tr_taskdevicepin1').style.display = style;document.getElementById('tr_taskdevicepin2').style.display =
+  // style;document.getElementById('tr_i2cuart_addr').style.display = i2cstyle;document.getElementById('tr_i2cuart_ch').style.display =
+  // i2cstyle;}"),
+  html_add_script(F("function serialPortChanged(e){var t=6==e.value?'':'none',l=1==e.value?'':'none';"
+                    "document.getElementById('tr_taskdevicepin1').style.display=t,"
+                    "document.getElementById('tr_taskdevicepin2').style.display=t,"
+                    "document.getElementById('tr_i2cuart_addr').style.display=l,"
+                    "document.getElementById('tr_i2cuart_ch').style.display=l}"),
                   false);
   #endif // ifdef ESP8266
   #ifdef ESP32
 
+#define STRINGIFY(s) STRINGIFY1(s)
+#define STRINGIFY1(s) #s
+
   // Script to show GPIO pins for HW serial ports or I2C addresses for the I2C to UART bridge
-  html_add_script(F(
-                    "function serialPortChanged(elem) {var style = (elem.value == 2 || elem.value == 4 || elem.value == 5) ? '' : 'none';var i2cstyle = elem.value == 1 ? '' : 'none';document.getElementById('tr_taskdevicepin1').style.display = style;document.getElementById('tr_taskdevicepin2').style.display = style;document.getElementById('tr_i2cuart_addr').style.display = i2cstyle;document.getElementById('tr_i2cuart_ch').style.display = i2cstyle;}"),
-                  false);
+  // "function serialPortChanged(elem) {var style = (elem.value == 2 || elem.value == 4 || elem.value == 5) ? '' : 'none';var i2cstyle =
+  // elem.value == 1 ? '' : 'none';document.getElementById('tr_taskdevicepin1').style.display =
+  // style;document.getElementById('tr_taskdevicepin2').style.display = style;document.getElementById('tr_i2cuart_addr').style.display =
+  // i2cstyle;document.getElementById('tr_i2cuart_ch').style.display = i2cstyle;}"),
+  html_add_script(F("function serialPortChanged(elem) {"
+" var style = 'none';"
+" var i2cstyle = elem.value == 1 ? '' : 'none';"
+"	if (elem.value == 2) {"
+//"	  document.querySelector('#taskdevicepin1').value =" STRINGIFY(SOC_RX0) ";"
+//"	  document.querySelector('#taskdevicepin2').value =" STRINGIFY(SOC_TX0) ";"
+"   style = '';"
+# if SOC_UART_NUM > 1
+"	} else if (elem.value == 4) {"
+//"	  document.querySelector('#taskdevicepin1').value =" STRINGIFY(SOC_RX1) ";"
+//"	  document.querySelector('#taskdevicepin2').value =" STRINGIFY(SOC_TX1) ";"
+"   style = '';"
+#endif
+# if SOC_UART_NUM > 2
+"	} else if (elem.value == 5) {"
+//"	  document.querySelector('#taskdevicepin1').value =" STRINGIFY(SOC_RX2) ";"
+//"	  document.querySelector('#taskdevicepin2').value =" STRINGIFY(SOC_TX2) ";"
+"   style = '';"
+#endif
+#if USES_SW_SERIAL
+"	} else if (elem.value == 6) {"
+"   style = '';"
+#endif
+"	}"
+" document.getElementById('tr_taskdevicepin1').style.display = style;"
+" document.getElementById('tr_taskdevicepin2').style.display = style;"
+" document.getElementById('tr_i2cuart_addr').style.display   = i2cstyle;"
+" document.getElementById('tr_i2cuart_ch').style.display     = i2cstyle;"
+"}"),
+                  true);
   #endif // ifdef ESP32
 
+  #if !USES_SW_SERIAL
+  allowSoftwareSerial = false;
+  #endif
+
+  const int ids[] = {
+     static_cast<int>(ESPEasySerialPort::not_set)
+    ,static_cast<int>(ESPEasySerialPort::serial0)
+#ifdef ESP8266
+    ,static_cast<int>(ESPEasySerialPort::serial0_swap)
+#endif // ifdef ESP8266
+#if SOC_UART_NUM > 1
+    ,static_cast<int>(ESPEasySerialPort::serial1)
+#endif
+#if SOC_UART_NUM > 2
+    ,static_cast<int>(ESPEasySerialPort::serial2)
+#endif // if SOC_UART_NUM > 2
+#if USES_SW_SERIAL
+    ,static_cast<int>(ESPEasySerialPort::software)
+#endif // if USES_SW_SERIAL
+
+#if USES_HWCDC
+    ,static_cast<int>(ESPEasySerialPort::usb_hw_cdc)
+#endif // if USES_HWCDC
+#if USES_USBCDC
+    ,static_cast<int>(ESPEasySerialPort::usb_cdc_0)
+//    ,static_cast<int>(ESPEasySerialPort::usb_cdc_1)
+#endif // if USES_USBCDC
+#if USES_I2C_SC16IS752
+    ,static_cast<int>(ESPEasySerialPort::sc16is752)
+#endif // if USES_I2C_SC16IS752
+  };
+
+  constexpr int NR_ESPEASY_SERIAL_TYPES = sizeof(ids) / sizeof(ids[1]);
   String options[NR_ESPEASY_SERIAL_TYPES];
-  int    ids[NR_ESPEASY_SERIAL_TYPES];
-  String attr[NR_ESPEASY_SERIAL_TYPES];
 
-  int index = 0;
+//  String attr[NR_ESPEASY_SERIAL_TYPES];
 
-  for (int i = 0; (index < NR_ESPEASY_SERIAL_TYPES) && (i < static_cast<int>(ESPEasySerialPort::MAX_SERIAL_TYPE)); ++i) {
+  for (int i = 0; (i < NR_ESPEASY_SERIAL_TYPES); ++i) {
+    ESPEasySerialPort serType = static_cast<ESPEasySerialPort>(ids[i]);
+
+    String option;
+    option.reserve(48);
+    option = serialHelper_getSerialTypeLabel(serType);
+#ifdef ESP8266
     int rxPin, txPin;
-    ESPEasySerialPort serType = static_cast<ESPEasySerialPort>(i);
-
     if (ESPeasySerialType::getSerialTypePins(serType, rxPin, txPin)) {
-      String option;
-      option.reserve(48);
-      option = serialHelper_getSerialTypeLabel(serType);
 
-      switch (serType) {
-        case ESPEasySerialPort::software:
-        {
-          if (!allowSoftwareSerial) {
-            attr[index] = F("disabled");
-          }
-          break;
-        }
-        case ESPEasySerialPort::sc16is752:
-        {
-          break;
-        }
-        case ESPEasySerialPort::serial0:
-        case ESPEasySerialPort::serial0_swap:
-        case ESPEasySerialPort::serial1:
-        case ESPEasySerialPort::serial2:
-        {
-          #ifdef ESP8266
-
-          // Show pins for ports with fixed pins
-          option += F(": ");
-          option += formatGpioLabel(rxPin, false);
-          option += ' ';
-          option += formatGpioDirection(gpio_input);
-          option += F("TX / ");
-          option += formatGpioLabel(txPin, false);
-          option += ' ';
-          option += formatGpioDirection(gpio_output);
-          option += F("RX");
-          #endif // ifdef ESP8266
-          break;
-        }
-
-        default:
-          break;
+      if (isHWserial(serType))
+      {
+        // Show pins for ports with fixed pins
+        option += F(": ");
+        option += formatGpioLabel(rxPin, false);
+        option += ' ';
+        option += formatGpioDirection(gpio_direction::gpio_input);
+        option += F("TX / ");
+        option += formatGpioLabel(txPin, false);
+        option += ' ';
+        option += formatGpioDirection(gpio_direction::gpio_output);
+        option += F("RX");
       }
-      options[index] = option;
-      ids[index]     = i;
-      ++index;
     }
+#endif
+    options[i] = option;
   }
   addFormSelector_script(F("Serial Port"), F("serPort"), NR_ESPEASY_SERIAL_TYPES,
                          options, ids, nullptr,
                          static_cast<int>(ESPeasySerialType::getSerialType(port, rxPinDef, txPinDef)),
                          F("serialPortChanged(this)")); // Script to toggle GPIO visibility when changing selection.
-#ifndef DISABLE_SC16IS752_Serial
+#if USES_I2C_SC16IS752
   serialHelper_addI2CuartSelectors(rxPinDef, txPinDef);
-#endif
+#endif // ifndef DISABLE_SC16IS752_Serial
 
 #ifdef ESP8266
+
   if ((rxPinDef == 15) || (txPinDef == 15)) {
     addFormNote(F("GPIO-15 (D8) requires a Buffer Circuit (PNP transistor) or ESP boot may fail."));
   }
-#endif
+#endif // ifdef ESP8266
 }
 
 void serialHelper_webformSave(uint8_t& port, int8_t& rxPin, int8_t& txPin) {
   int serialPortSelected = getFormItemInt(F("serPort"), -1);
-
   if (serialPortSelected < 0) { return; }
+
+  rxPin = getFormItemInt(F("taskdevicepin1"), -1);
+  txPin = getFormItemInt(F("taskdevicepin2"), -1);
 
   ESPEasySerialPort serType = static_cast<ESPEasySerialPort>(serialPortSelected);
 
   port = serialPortSelected;
 
-  switch (serType) {
-    case ESPEasySerialPort::software:
-      break;
-    #ifndef DISABLE_SC16IS752_Serial
-    case ESPEasySerialPort::sc16is752:
-      rxPin = getFormItemInt(F("i2cuart_addr"), rxPin);
-      txPin = getFormItemInt(F("i2cuart_ch"), txPin);
-      break;
-    #endif
-    case ESPEasySerialPort::serial0:
-    case ESPEasySerialPort::serial0_swap:
-    case ESPEasySerialPort::serial1:
-    case ESPEasySerialPort::serial2:
-    {
-      #ifdef ESP8266
-
-      // Ports with a fixed pin layout, so load the defaults.
-      int tmprxPin, tmptxPin;
-
-      if (ESPeasySerialType::getSerialTypePins(serType, tmprxPin, tmptxPin)) {
-        rxPin = tmprxPin;
-        txPin = tmptxPin;
-      }
-      #endif // ifdef ESP8266
-      break;
-    }
-    default:
-      break;
+  #ifndef DISABLE_SC16IS752_Serial
+  if (serType == ESPEasySerialPort::sc16is752) {
+    rxPin = getFormItemInt(F("i2cuart_addr"), rxPin);
+    txPin = getFormItemInt(F("i2cuart_ch"), txPin);
   }
+  #endif // ifndef DISABLE_SC16IS752_Serial
+  #ifdef ESP8266
+  if (isHWserial(serType)) {
+
+    // Ports with a fixed pin layout, so load the defaults.
+    int tmprxPin, tmptxPin;
+
+    if (ESPeasySerialType::getSerialTypePins(serType, tmprxPin, tmptxPin)) {
+      rxPin = tmprxPin;
+      txPin = tmptxPin;
+    }
+  }
+  #endif // ifdef ESP8266
 }
 
 void serialHelper_webformSave(struct EventStruct *event) {
@@ -307,7 +351,7 @@ void serialHelper_serialconfig_webformLoad(struct EventStruct *event, uint8_t cu
   String id = F("serConf");
 
   addRowLabel_tr_id(F("Serial Config"), id);
-  do_addSelector_Head(id, EMPTY_STRING, EMPTY_STRING, false);
+  do_addSelector_Head(id, F(""), EMPTY_STRING, false);
 
   if (currentSelection == 0) {
     // Must truncate it to 1 uint8_t, since ESP32 uses a 32-bit value. We add these high bits later for ESP32.
@@ -359,7 +403,7 @@ uint8_t serialHelper_convertOldSerialConfig(uint8_t newLocationConfig) {
   if (serialHelper_isValid_serialconfig(newLocationConfig)) {
     return newLocationConfig;
   }
-  uint8_t serialconfig = 0x10;                                                   // Default stopbits = 1
+  uint8_t serialconfig = 0x10;                                                // Default stopbits = 1
 
   serialconfig += ExtraTaskSettings.TaskDevicePluginConfigLong[3];            // Parity
   serialconfig += (ExtraTaskSettings.TaskDevicePluginConfigLong[2] - 5) << 2; // databits

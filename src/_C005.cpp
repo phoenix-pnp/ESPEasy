@@ -3,7 +3,6 @@
 
 # include "src/Commands/InternalCommands.h"
 # include "src/Globals/EventQueue.h"
-# include "src/Globals/ExtraTaskSettings.h"
 # include "src/Helpers/PeriodicalActions.h"
 # include "src/Helpers/StringParser.h"
 # include "_Plugin_Helper.h"
@@ -77,10 +76,14 @@ bool CPlugin_005(CPlugin::Function function, struct EventStruct *event, String& 
 
     case CPlugin::Function::CPLUGIN_PROTOCOL_SEND:
     {
+      if (MQTT_queueFull(event->ControllerIndex)) {
+        break;
+      }
+
+
       String pubname         = CPlugin_005_pubname;
       bool   mqtt_retainFlag = CPlugin_005_mqtt_retainFlag;
 
-      LoadTaskSettings(event->TaskIndex);
       parseControllerVariables(pubname, event, false);
 
       uint8_t valueCount = getValueCountForTask(event->TaskIndex);
@@ -88,7 +91,7 @@ bool CPlugin_005(CPlugin::Function function, struct EventStruct *event, String& 
       for (uint8_t x = 0; x < valueCount; x++)
       {
         // MFD: skip publishing for values with empty labels (removes unnecessary publishing of unwanted values)
-        if (ExtraTaskSettings.TaskDeviceValueNames[x][0] == 0) {
+        if (getTaskValueName(event->TaskIndex, x).isEmpty()) {
           continue; // we skip values with empty labels
         }
         String tmppubname = pubname;
@@ -112,10 +115,12 @@ bool CPlugin_005(CPlugin::Function function, struct EventStruct *event, String& 
 
         // Small optimization so we don't try to copy potentially large strings
         if (event->sensorType == Sensor_VType::SENSOR_TYPE_STRING) {
-          MQTTpublish(event->ControllerIndex, event->TaskIndex, tmppubname.c_str(), event->String2.c_str(), mqtt_retainFlag);
+          if (MQTTpublish(event->ControllerIndex, event->TaskIndex, tmppubname.c_str(), event->String2.c_str(), mqtt_retainFlag))
+            success = true;
         } else {
           // Publish using move operator, thus tmppubname and value are empty after this call
-          MQTTpublish(event->ControllerIndex, event->TaskIndex, std::move(tmppubname), std::move(value), mqtt_retainFlag);
+          if (MQTTpublish(event->ControllerIndex, event->TaskIndex, std::move(tmppubname), std::move(value), mqtt_retainFlag))
+            success = true;
         }
       }
       break;
@@ -146,7 +151,7 @@ bool C005_parse_command(struct EventStruct *event) {
   const String lastPartTopic = event->String1.substring(lastindex + 1);
   const bool has_cmd_arg_index = event->String1.lastIndexOf(F("cmd_arg")) != -1;
 
-  if (lastPartTopic.equals(F("cmd"))) {
+  if (equals(lastPartTopic, F("cmd"))) {
     // Example:
     // Topic: ESP_Easy/Bathroom_pir_env/cmd
     // Message: gpio,14,0
@@ -226,7 +231,7 @@ bool C005_parse_command(struct EventStruct *event) {
     // in case of event, store to buffer and return...
     const String command = parseString(cmd, 1);
 
-    if ((command.equals(F("event"))) || (command.equals(F("asyncevent")))) {
+    if ((equals(command, F("event"))) || (equals(command, F("asyncevent")))) {
       if (Settings.UseRules) {
         // Need to sanitize the event a bit to allow for sending event values as MQTT messages.
         // For example:

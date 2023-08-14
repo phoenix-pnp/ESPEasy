@@ -3,9 +3,9 @@
 
 #include "../../ESPEasy_common.h"
 
-#include "../DataTypes/ESPEasy_plugin_functions.h"
+#if FEATURE_NOTIFIER
 
-#include <Arduino.h>
+#include "../DataTypes/ESPEasy_plugin_functions.h"
 
 
 struct EventStruct;
@@ -1043,5 +1043,6 @@ void NPluginInit();
 
 #undef ADDNPLUGIN_H
 
+#endif
 
 #endif

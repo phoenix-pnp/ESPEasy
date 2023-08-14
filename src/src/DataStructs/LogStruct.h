@@ -1,7 +1,6 @@
 #ifndef DATASTRUCTS_LOGSTRUCT_H
 #define DATASTRUCTS_LOGSTRUCT_H
 
-#include <Arduino.h>
 
 #include "../../ESPEasy_common.h"
 
@@ -16,7 +15,7 @@
   #ifdef USE_SECOND_HEAP
     #define LOG_STRUCT_MESSAGE_LINES 60
   #else
-    #if defined(PLUGIN_BUILD_TESTING) || defined(PLUGIN_BUILD_DEV)
+    #if defined(PLUGIN_BUILD_COLLECTION) || defined(PLUGIN_BUILD_DEV)
       #define LOG_STRUCT_MESSAGE_LINES 10
     #else
       #define LOG_STRUCT_MESSAGE_LINES 15
@@ -56,7 +55,7 @@ struct LogStruct {
       return (idx + 1) % LOG_STRUCT_MESSAGE_LINES;
     }
 
-    String Message[LOG_STRUCT_MESSAGE_LINES];
+    String Message[LOG_STRUCT_MESSAGE_LINES] = {};
     unsigned long timeStamp[LOG_STRUCT_MESSAGE_LINES] = {0};
     int write_idx = 0;
     int read_idx = 0;

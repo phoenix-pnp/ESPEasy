@@ -6,6 +6,8 @@
 
 #include "../DataTypes/NetworkMedium.h"
 
+#include "../Helpers/Hardware_defines.h"
+
 // ********************************************************************************
 //   User specific configuration
 // ********************************************************************************
@@ -83,7 +85,7 @@
 #endif
 
 #ifndef DEFAULT_WIFI_CONNECTION_TIMEOUT
-#define DEFAULT_WIFI_CONNECTION_TIMEOUT  10000  // minimum timeout in ms for WiFi to be connected.
+#define DEFAULT_WIFI_CONNECTION_TIMEOUT  20000  // minimum timeout in ms for WiFi to be connected.
 #endif
 #ifndef DEFAULT_WIFI_FORCE_BG_MODE
 #define DEFAULT_WIFI_FORCE_BG_MODE       false  // when set, only allow to connect in 802.11B or G mode (not N)
@@ -131,6 +133,9 @@
 #ifndef DEFAULT_CONTROLLER_PASS
 #define DEFAULT_CONTROLLER_PASS    ""                                       // Default controller Password
 #endif
+#ifndef DEFAULT_CONTROLLER_TIMEOUT
+#define DEFAULT_CONTROLLER_TIMEOUT 100
+#endif
 
 // using a default template, you also need to set a DEFAULT PROTOCOL to a suitable MQTT protocol !
 #ifndef DEFAULT_PUB
@@ -172,11 +177,47 @@
                                                 //   9 = FHEM HTTP
 #endif
 
+#ifndef DEFAULT_CONSOLE_PORT
+#if USES_HWCDC
+#define DEFAULT_CONSOLE_PORT 7    // 7 = ESPEasySerialPort::usb_hw_cdc
+#elif USES_USBCDC
+#define DEFAULT_CONSOLE_PORT 8    // 8 = ESPEasySerialPort::usb_cdc_0
+#else
+#define DEFAULT_CONSOLE_PORT 2    // 2 = ESPEasySerialPort::serial0
+#endif
+#endif
+#ifndef DEFAULT_CONSOLE_PORT_RXPIN
+#define DEFAULT_CONSOLE_PORT_RXPIN  SOC_RX0
+#endif
+#ifndef DEFAULT_CONSOLE_PORT_TXPIN
+#define DEFAULT_CONSOLE_PORT_TXPIN  SOC_TX0
+#endif
+#ifndef DEFAULT_CONSOLE_SER0_FALLBACK
+#if USES_HWCDC
+#define DEFAULT_CONSOLE_SER0_FALLBACK  1
+#elif USES_USBCDC
+#define DEFAULT_CONSOLE_SER0_FALLBACK  1
+#else
+#define DEFAULT_CONSOLE_SER0_FALLBACK  0
+#endif
+#endif
+
+
 #ifndef DEFAULT_PIN_I2C_SDA
+#ifdef ESP8266
 #define DEFAULT_PIN_I2C_SDA              4
 #endif
+#ifdef ESP32
+#define DEFAULT_PIN_I2C_SDA              -1                // Undefined
+#endif
+#endif
 #ifndef DEFAULT_PIN_I2C_SCL
+#ifdef ESP8266
 #define DEFAULT_PIN_I2C_SCL              5
+#endif
+#ifdef ESP32
+#define DEFAULT_PIN_I2C_SCL              -1                // Undefined
+#endif
 #endif
 #ifndef DEFAULT_I2C_CLOCK_SPEED
 #define DEFAULT_I2C_CLOCK_SPEED          400000            // Use 100 kHz if working with old I2C chips
@@ -184,8 +225,8 @@
 #ifndef DEFAULT_I2C_CLOCK_SPEED_SLOW
 #define DEFAULT_I2C_CLOCK_SPEED_SLOW      100000            // Use 100 kHz for old/slow I2C chips
 #endif
-#ifndef USE_I2C_DEVICE_SCAN
-#define USE_I2C_DEVICE_SCAN              true               // Show device name in I2C scan
+#ifndef FEATURE_I2C_DEVICE_SCAN
+#define FEATURE_I2C_DEVICE_SCAN           1                 // Show device name in I2C scan
 #endif
 
 #ifndef DEFAULT_PIN_STATUS_LED
@@ -217,7 +258,7 @@
 #define DEFAULT_ETH_CLOCK_MODE           EthClockMode_t::Ext_crystal_osc
 #endif
 #ifndef DEFAULT_NETWORK_MEDIUM
-  #ifdef HAS_ETHERNET
+  #if FEATURE_ETHERNET
     #define DEFAULT_NETWORK_MEDIUM       NetworkMedium_t::Ethernet
   #else
     #define DEFAULT_NETWORK_MEDIUM       NetworkMedium_t::WIFI
@@ -250,6 +291,15 @@
 #ifndef DEFAULT_MQTT_RETAIN
 #define DEFAULT_MQTT_RETAIN                     false   // (true|false) Retain MQTT messages?
 #endif
+
+#ifndef DEFAULT_CONTROLLER_DELETE_OLDEST
+#define DEFAULT_CONTROLLER_DELETE_OLDEST              false  // (true|false) to delete oldest message when queue is full
+#endif
+
+#ifndef DEFAULT_CONTROLLER_MUST_CHECK_REPLY 
+#define DEFAULT_CONTROLLER_MUST_CHECK_REPLY            false  // (true|false) Check Acknowledgment
+#endif
+
 #ifndef DEFAULT_MQTT_DELAY
 #define DEFAULT_MQTT_DELAY                      100    // Time in milliseconds to retain MQTT messages
 #endif
@@ -313,7 +363,7 @@
 #endif
 
 // --- Defaults to be used for custom automatic provisioning builds ------------------------------------
-#ifdef USE_CUSTOM_PROVISIONING
+#if FEATURE_CUSTOM_PROVISIONING
   #ifndef DEFAULT_FACTORY_DEFAULT_DEVICE_MODEL
     #define DEFAULT_FACTORY_DEFAULT_DEVICE_MODEL  0 // DeviceModel_default
   #endif
@@ -341,6 +391,9 @@
   #ifndef DEFAULT_PROVISIONING_FETCH_PROVISIONING
     #define DEFAULT_PROVISIONING_FETCH_PROVISIONING false
   #endif
+  #ifndef DEFAULT_PROVISIONING_FETCH_FIRMWARE
+    #define DEFAULT_PROVISIONING_FETCH_FIRMWARE     false
+  #endif
   #ifndef DEFAULT_PROVISIONING_SAVE_URL
     #define DEFAULT_PROVISIONING_SAVE_URL           false
   #endif
@@ -359,7 +412,7 @@
   #ifndef DEFAULT_PROVISIONING_PASS
     #define DEFAULT_PROVISIONING_PASS               ""
   #endif
-#endif
+#endif // if FEATURE_CUSTOM_PROVISIONING
 
 #ifndef BUILD_IN_WEBHEADER
 #define BUILD_IN_WEBHEADER                      false
@@ -375,6 +428,11 @@
 # define GITHUB_RELEASES_LINK_SUFFIX "</a>"
 #endif
 
+
+// --- We define the default features to be enabled here
+#ifndef FEATURE_ESPEASY_P2P
+  #define FEATURE_ESPEASY_P2P   1
+#endif
 
 /*
 // --- Experimental Advanced Settings (NOT ACTIVES at this time) ------------------------------------

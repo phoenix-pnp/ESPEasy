@@ -1,15 +1,18 @@
 #ifndef HELPERS_ESPEASY_STORAGE_H
 #define HELPERS_ESPEASY_STORAGE_H
 
-#include <FS.h>
 
+#include "../../ESPEasy_common.h"
+
+#include "../Helpers/FS_Helper.h"
+
+#include "../DataStructs/ChecksumType.h"
 #include "../DataStructs/ProvisioningStruct.h"
 #include "../DataTypes/ESPEasyFileType.h"
 #include "../DataTypes/SettingsType.h"
 #include "../Globals/Plugins.h"
 #include "../Globals/CPlugins.h"
 
-#include "../../ESPEasy_common.h"
 
 /********************************************************************************************\
    file system error handling
@@ -28,18 +31,26 @@ String appendLineToFile(const String& fname, const String& line);
 
 String appendToFile(const String& fname, const uint8_t *data, unsigned int size);
 
+bool fileExists(const __FlashStringHelper * fname);
 bool fileExists(const String& fname);
 
-fs::File tryOpenFile(const String& fname, const String& mode);
+enum class FileDestination_e : uint8_t {
+  ANY   = 0,
+  FLASH = 1,
+  SD    = 2,
+};
 
-bool tryRenameFile(const String& fname_old, const String& fname_new);
+fs::File tryOpenFile(const String& fname, const String& mode, FileDestination_e destination = FileDestination_e::ANY);
 
-bool tryDeleteFile(const String& fname);
+bool tryRenameFile(const String& fname_old, const String& fname_new, FileDestination_e destination = FileDestination_e::ANY);
+
+bool tryDeleteFile(const String& fname, FileDestination_e destination = FileDestination_e::ANY);
 
 /********************************************************************************************\
    Fix stuff to clear out differences between releases
+   Return true when settings were changed/patched
  \*********************************************************************************************/
-String BuildFixes();
+bool BuildFixes();
 
 /********************************************************************************************\
    Mount FS and check config.dat
@@ -51,13 +62,33 @@ bool FS_format();
 #ifdef ESP32
 
 int  getPartionCount(uint8_t pType, uint8_t pSubType = 0xFF);
+String patch_fname(const String& fname);
 
+#endif
+#ifdef ESP8266
+#define patch_fname(F) (F)
 #endif
 
 /********************************************************************************************\
    Garbage collection
  \*********************************************************************************************/
 bool GarbageCollection();
+
+
+// Macros needed for template class types, like SettingsStruct
+#define COMPUTE_STRUCT_CHECKSUM_UPDATE(STRUCT,OBJECT) \
+   ChecksumType::computeChecksum(OBJECT.md5,\
+                   reinterpret_cast<uint8_t *>(&OBJECT),\
+                   sizeof(STRUCT),\
+                   offsetof(STRUCT, md5),\
+                   true)
+
+#define COMPUTE_STRUCT_CHECKSUM(STRUCT,OBJECT) \
+   ChecksumType::computeChecksum(OBJECT.md5,\
+                   reinterpret_cast<uint8_t *>(&OBJECT),\
+                   sizeof(STRUCT),\
+                   offsetof(STRUCT, md5),\
+                   false)
 
 /********************************************************************************************\
    Save settings to file system
@@ -77,16 +108,27 @@ String LoadSettings();
    Disable Plugin, based on bootFailedCount
  \*********************************************************************************************/
 uint8_t disablePlugin(uint8_t bootFailedCount);
+uint8_t disableAllPlugins(uint8_t bootFailedCount);
 
 /********************************************************************************************\
    Disable Controller, based on bootFailedCount
  \*********************************************************************************************/
 uint8_t disableController(uint8_t bootFailedCount);
+uint8_t disableAllControllers(uint8_t bootFailedCount);
 
 /********************************************************************************************\
    Disable Notification, based on bootFailedCount
  \*********************************************************************************************/
+#if FEATURE_NOTIFIER
 uint8_t disableNotification(uint8_t bootFailedCount);
+uint8_t disableAllNotifications(uint8_t bootFailedCount);
+#endif
+
+/********************************************************************************************\
+   Disable Rules, based on bootFailedCount
+ \*********************************************************************************************/
+uint8_t disableRules(uint8_t bootFailedCount);
+
 
 bool getAndLogSettingsParameters(bool read, SettingsType::Enum settingsType, int index, int& offset, int& max_size);
 
@@ -169,7 +211,7 @@ String SaveCustomControllerSettings(controllerIndex_t ControllerIndex, const uin
 String LoadCustomControllerSettings(controllerIndex_t ControllerIndex, uint8_t *memAddress, int datasize);
 
 
-#ifdef USE_CUSTOM_PROVISIONING
+#if FEATURE_CUSTOM_PROVISIONING
 /********************************************************************************************\
    Save Provisioning Settings
  \*********************************************************************************************/
@@ -183,7 +225,7 @@ String loadProvisioningSettings(ProvisioningStruct& ProvisioningSettings);
 
 
 
-
+#if FEATURE_NOTIFIER
 /********************************************************************************************\
    Save Controller settings to file system
  \*********************************************************************************************/
@@ -195,7 +237,7 @@ String SaveNotificationSettings(int NotificationIndex, const uint8_t *memAddress
  \*********************************************************************************************/
 String LoadNotificationSettings(int NotificationIndex, uint8_t *memAddress, int datasize);
 
-
+#endif
 /********************************************************************************************\
    Init a file with zeros on file system
  \*********************************************************************************************/
@@ -263,10 +305,13 @@ size_t SpiffsFreeSpace();
 
 bool SpiffsFull();
 
+#if FEATURE_RTC_CACHE_STORAGE
 /********************************************************************************************\
    Handling cached data
  \*********************************************************************************************/
 String createCacheFilename(unsigned int count);
+
+bool isCacheFile(const String& fname);
 
 // Match string with an integer between '_' and ".bin"
 int getCacheFileCountFromFilename(const String& fname);
@@ -274,6 +319,7 @@ int getCacheFileCountFromFilename(const String& fname);
 // Look into the filesystem to see if there are any cache files present on the filesystem
 // Return true if any found.
 bool getCacheFileCounters(uint16_t& lowest, uint16_t& highest, size_t& filesizeHighest);
+#endif
 
 /********************************************************************************************\
    Get partition table information
@@ -292,11 +338,11 @@ String getPartitionTable(uint8_t pType, const String& itemSep, const String& lin
 /********************************************************************************************\
    Download ESPEasy file types from HTTP server
  \*********************************************************************************************/
-#ifdef USE_DOWNLOAD
+#if FEATURE_DOWNLOAD
 String downloadFileType(const String& url, const String& user, const String& pass, FileType::Enum filetype, unsigned int filenr = 0);
 
-#endif
-#ifdef USE_CUSTOM_PROVISIONING
+#endif // if FEATURE_DOWNLOAD
+#if FEATURE_CUSTOM_PROVISIONING
 // Download file type based on settings stored in provisioning.dat file.
 String downloadFileType(FileType::Enum filetype, unsigned int filenr = 0);
 

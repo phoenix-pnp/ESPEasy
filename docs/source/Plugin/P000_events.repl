@@ -43,6 +43,23 @@
 
    "
    "
+   ``TaskError#<taskname>``
+   Added: 2022-06-21
+   Triggered when a tasks ``PLUGIN_READ`` caused an error.
+   The reason to trigger this error is plugin specific and this is not implemented for all plugins.
+   For example, the BMx280 plugin will trigger this event when it was unable to start a measurement, for example when the sensor does not reply or its reply is unexpected.
+   ","
+
+   .. code-block:: none
+
+        on TaskError#bme do
+          LogEntry,'TaskError task: %eventvalue1% result: %eventvalue2%'
+        endon
+
+   The first event value is the task index, the second event value is a plugin specific indicator of the error that occured.
+   N.B. The second event value can be a string.
+   "
+   "
    ``System#Wake``
    Triggered after power on.
    ","
@@ -58,7 +75,7 @@
    ``System#BootMode``
    Added: 2021-10-18
   
-   On ESP32 only.
+   On ESP32-series only.
 
    Event is sent right before network connection is attempted.
 
@@ -72,7 +89,7 @@
           LogEntry,'Boot pins: GPIO-5: %eventvalue1%, GPIO-15: %eventvalue2%, GPIO-4: %eventvalue3%, GPIO-2: %eventvalue4%'
         endon
 
-   The event values represent the state of these pins in the following order:
+   For the classic ESP32, the event values represent the state of these pins in the following order:
 
    * GPIO-5: ``%eventvalue1%`` (internal pull-up, default: ``1``)
    * GPIO-15: ``%eventvalue2%`` (internal pull-up, default: ``1``)
@@ -84,6 +101,8 @@
    N.B. When pulling down GPIO-15 during boot, the ROM bootloader messages will be silenced.
 
    N.B.2 Do not pull GPIO-2 high when GPIO-0 is low for programming mode.
+
+   See 'Boot Strapping Pins' documentation for the boot strapping pins for all ESP32-series chips.
 
    "
    "
@@ -108,6 +127,25 @@
 
 	   on System#Sleep do
 	    GPIO,2,0
+	   endon
+
+   "
+   "
+   ``http#hostname=404``
+   Added: 2022/07/23
+   Triggered as a 'return value' when performing a HTTP call to some host.
+   The event value is the HTTP return code.
+   The ``hostname`` is replaced by the hostname used in the HTTP call.
+   ","
+
+   .. code-block:: none
+
+	   on http#192.168.1.2 do
+       if %eventvalue1%!=200
+         // %eventvalue1% is HTTP Code
+         // %eventpar% is the part of the event after the #, thus here it is the hostname
+         LogEntry,'HTTP error: %eventvalue1% to: %eventpar%:'
+       endif
 	   endon
 
    "

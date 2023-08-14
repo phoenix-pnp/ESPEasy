@@ -1,7 +1,6 @@
 #ifndef HELPERS_STRINGGENERATOR_GPIO_H
 #define HELPERS_STRINGGENERATOR_GPIO_H
 
-#include <Arduino.h>
 
 #include "../../ESPEasy_common.h"
 
@@ -11,20 +10,24 @@
 #define HTML_SYMBOL_I_O     "&#8660;"
 
 
-enum gpio_direction {
+enum class gpio_direction : uint8_t {
   gpio_input,
   gpio_output,
   gpio_bidirectional
 };
 
-enum class PinSelectPurpose {
+enum class PinSelectPurpose : uint8_t {
   Generic,
   Generic_input,
   Generic_output,
   Generic_bidir,
   I2C,
   SPI,
-  Ethernet
+  SPI_MISO,
+  Ethernet,
+  Serial_input,
+  Serial_output,
+  DAC
 
 };
 
@@ -54,6 +57,10 @@ String formatGpioName_TX(bool optional);
 
 String formatGpioName_RX(bool optional);
 
+String formatGpioName_serialTX(bool optional);
+
+String formatGpioName_serialRX(bool optional);
+
 String formatGpioName_TX_HW(bool optional);
 
 String formatGpioName_RX_HW(bool optional);
@@ -61,6 +68,7 @@ String formatGpioName_RX_HW(bool optional);
 #ifdef ESP32
 
 String formatGpioName_ADC(int gpio_pin);
+String formatGpioName_DAC(int gpio_pin);
 
 #endif // ifdef ESP32
 

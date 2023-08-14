@@ -68,6 +68,10 @@ The Mitsubishi Heatpump plugin can be added as simple as selecting it from the l
 
 .. image:: P093_2.jpg
 
+
+See: :ref:`SerialHelper_page`
+
+
 Once we hit submit, the plugin will start sending messages through controller, i.e. MQTT with payload:
 
 ``{"roomTemperature":25.5,"wideVane":"|","power":"OFF","mode":"COOL","fan":"AUTO","vane":"AUTO","iSee":true,"operating":true,"compressorFrequency":5,"temperature":24.0}``
@@ -104,6 +108,13 @@ Commands are send via MQTT using syntax ``<MQTT subscribe template>/cmd`` with p
 Please check `here <https://espeasy.readthedocs.io/en/latest/Reference/Command.html>`_ for more details on how to send commands using ESP Easy.
 
 Please `check <https://community.openhab.org/t/mitsubishi-heat-pump/91765>`_ for an example integration with openHAB.
+
+Get Config Values
+-----------------
+
+Get Config Values retrieves values or settings from the sensor or plugin, and can be used in Rules, Display plugins, Formula's etc. The square brackets **are** part of the variable. Replace ``<taskname>`` by the **Name** of the task.
+
+.. include:: P093_config_values.repl
 
 Special thanks
 --------------

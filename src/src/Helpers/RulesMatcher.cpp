@@ -3,9 +3,11 @@
 #include "../Helpers/ESPEasy_math.h"
 #include "../Helpers/ESPEasy_time_calc.h"
 #include "../Helpers/Numerical.h"
+#include "../Helpers/StringConverter.h"
+#include "../Helpers/StringParser.h"
 
 
-bool ruleMatch(const String& event, const String& rule) {
+bool ruleMatch(String event, String rule) {
   #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("ruleMatch"));
   #endif // ifndef BUILD_NO_RAM_TRACKER
@@ -15,10 +17,13 @@ bool ruleMatch(const String& event, const String& rule) {
     return true;
   }
 
-  String tmpEvent = event;
-  tmpEvent.trim();
+  rule.trim();
+  parseStandardConversions(rule, false);
+  rule = parseTemplate(rule);
 
-  if (tmpEvent.equalsIgnoreCase(rule)) {
+  event.trim();
+
+  if (event.equalsIgnoreCase(rule)) {
     return true;
   }
 
@@ -31,6 +36,7 @@ bool ruleMatch(const String& event, const String& rule) {
     if ((pos1 > 0) && (pos2 > 0)) {
       if (event.substring(0, pos1).equalsIgnoreCase(rule.substring(0, pos2))) // if this is a clock rule
       {
+//        addLog(LOG_LEVEL_INFO, concat(F("Clock#Time="), rule.substring(pos2 + 1)));
         unsigned long clockEvent = string2TimeLong(event.substring(pos1 + 1));
         unsigned long clockSet   = string2TimeLong(rule.substring(pos2 + 1));
 
@@ -61,12 +67,12 @@ bool ruleMatch(const String& event, const String& rule) {
       // no # sign in rule, use 'wildcard' match on event 'source'
       return event.substring(0, rule.length()).equalsIgnoreCase(rule);
     }
-    return tmpEvent.equalsIgnoreCase(rule);
+    return event.equalsIgnoreCase(rule);
   }
 
 
   // parse event into verb and value
-  double value = 0;
+  ESPEASY_RULES_FLOAT_TYPE value{};
   int    equal_pos   = event.indexOf('=');
 
   if (equal_pos >= 0) {
@@ -75,7 +81,7 @@ bool ruleMatch(const String& event, const String& rule) {
 
       // FIXME TD-er: What to do when trying to match NaN values?
     }
-    tmpEvent = event.substring(0, equal_pos);
+    event = event.substring(0, equal_pos);
   }
 
   // parse rule
@@ -84,11 +90,11 @@ bool ruleMatch(const String& event, const String& rule) {
 
   if (!findCompareCondition(rule, compare, posStart, posEnd)) {
     // No compare condition found, so just check if the event- and rule string match.
-    return tmpEvent.equalsIgnoreCase(rule);
+    return event.equalsIgnoreCase(rule);
   }
 
-  const bool stringMatch = tmpEvent.equalsIgnoreCase(rule.substring(0, posStart));
-  double     ruleValue   = 0;
+  const bool stringMatch = event.equalsIgnoreCase(rule.substring(0, posStart));
+  ESPEASY_RULES_FLOAT_TYPE     ruleValue{};
 
   if (!validDoubleFromString(rule.substring(posEnd), ruleValue)) {
     return false;
@@ -120,7 +126,7 @@ bool compareIntValues(char compare, const int& Value1, const int& Value2)
   return false;
 }
 
-bool compareDoubleValues(char compare, const double& Value1, const double& Value2)
+bool compareDoubleValues(char compare, const ESPEASY_RULES_FLOAT_TYPE& Value1, const ESPEASY_RULES_FLOAT_TYPE& Value2)
 {
   switch (compare) {
     case '>' + '=': return !definitelyLessThan(Value1, Value2);
@@ -233,8 +239,8 @@ bool getEventFromRulesLine(const String& line, String& event, String& action)
   event.trim();
 
   // Ignore escape char
-  event.replace(F("["), EMPTY_STRING);
-  event.replace(F("]"), EMPTY_STRING);
+//  removeChar(event, '[');
+//  removeChar(event, ']');
 
   // action: The optional part after the " do"
   action = line.substring(pos_do + 3);

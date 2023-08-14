@@ -18,7 +18,7 @@
 
 #define PLUGIN_071
 #define PLUGIN_ID_071 71
-#define PLUGIN_NAME_071 "Communication - Kamstrup Multical 401 [TESTING]"
+#define PLUGIN_NAME_071 "Communication - Kamstrup Multical 401"
 #define PLUGIN_VALUENAME1_071 "Heat"
 #define PLUGIN_VALUENAME2_071 "Volume"
 
@@ -128,7 +128,7 @@ boolean Plugin_071(uint8_t function, struct EventStruct *event, String& string)
         i = 0;
         parityerrors = 0;
         char *tmpstr;
-        double m_energy, m_volume;
+        ESPEASY_RULES_FLOAT_TYPE m_energy, m_volume;
         float m_tempin, m_tempout, m_tempdiff, m_power;
         long m_hours, m_flow;
 

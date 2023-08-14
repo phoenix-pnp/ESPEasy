@@ -6,8 +6,9 @@
 /********************************************************************************************\
    Check if an event matches to a given rule
  \*********************************************************************************************/
-bool ruleMatch(const String& event,
-               const String& rule);
+// Both strings are copied, since they may need to be trimmed and call parseTemplate
+bool ruleMatch(String event,
+               String rule);
 
 
 bool compareIntValues(char       compare,
@@ -15,8 +16,8 @@ bool compareIntValues(char       compare,
                       const int& Value2);
 
 bool compareDoubleValues(char          compare,
-                         const double& Value1,
-                         const double& Value2);
+                         const ESPEASY_RULES_FLOAT_TYPE& Value1,
+                         const ESPEASY_RULES_FLOAT_TYPE& Value2);
 
 bool findCompareCondition(const String& check,
                           char        & compare,
